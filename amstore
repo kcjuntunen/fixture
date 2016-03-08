@@ -1,0 +1,105 @@
+#!/usr/bin/env python
+import httplib, urllib, os
+import datetime
+import serial, smtplib
+import sqlite_writer as sqlw
+
+DAY, NIGHT = 1, 2
+
+def check_time(time_to_check, on_time, off_time):
+    if on_time > off_time:
+        if time_to_check > on_time or time_to_check < off_time:
+            return NIGHT, True
+    elif on_time < off_time:
+        if time_to_check > on_time and time_to_check < off_time:            
+            return DAY, True
+    elif time_to_check == on_time:
+        return None, True
+
+    return None, False
+
+def send_email():
+    print "Attempting to send email"
+    try:
+        sender = 'kcjuntunen@amstore.com'
+        receivers = ['rvansluyters@amstore.com', 'juntunen.kc@gmail.com']
+        message = """From: Raspberry Pi <no_real_email@nobody.com>
+To: Ryan <rvansluyters@amstore.com>, K. C. <juntunen.kc@gmail.com>
+Subject: Alert!
+
+The lights went out in our magic showcase.
+"""
+        smtpo = smtplib.SMTP('mail2.amstore.com')
+        smtpo.sendmail(sender, receivers, message)
+        print "Sent"
+    except Exception, e:
+        print "Failure sending email. %s" % e
+    
+
+def send_data(ser):
+    sw = sqlw.sqlite_writer("/tmp/amstore.db")
+    try:
+        l = ser.readline()
+        line = str.split(l, ":")
+        print l
+    except:
+        print "Couldn't split string: ", l        
+
+    try:
+        sw.insert_ser_line_old(l);
+    except:
+        print "Couldn't insert data."
+
+        
+    now = datetime.datetime.now().time()
+    on_time = datetime.time(14, 15)
+    off_time = datetime.time(21, 30)
+    when, matching = check_time(now, on_time, off_time)
+    should_I_send = False
+    if matching:
+        if when == DAY:
+            print "Daytime; time to send email."
+            should_I_send = True;
+        elif when == NIGHT:
+            print "Not a good time for email."
+        else:
+            print "WTH?"
+    else:
+        print now
+        print when
+    
+    if (float(line[4]) < -700) and should_I_send:
+        send_email()
+    
+    params = urllib.urlencode(
+        {'field1': line[1],
+         'field2': line[2],
+         'field3': line[3],
+         'field4': line[4],
+         'field5': line[5],
+         'field6': line[6],
+         'field7': os.getloadavg()[0],
+         'key': 'UQ42GIJZ50WRSQXE'})
+    
+    headers = {"Content-type": "application/x-www-form-urlencoded",
+               "Accept": "text/plain"}
+    
+    conn = httplib.HTTPConnection("api.thingspeak.com:80")
+
+    try:
+        conn.request("POST", "/update", params, headers)
+        response = conn.getresponse()
+        print response.status, response.reason
+        data = response.read()
+        conn.close()
+    except:
+        print "Connection failed"    
+    
+if __name__ == "__main__":
+    ser = serial.Serial('/dev/ttyAMA0', 9600)
+    while True:
+        try:
+            send_data(ser)
+        except:
+            print "Exception"
+            send_data(ser)
