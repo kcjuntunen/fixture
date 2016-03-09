@@ -11,7 +11,7 @@ def check_time(time_to_check, on_time, off_time):
         if time_to_check > on_time or time_to_check < off_time:
             return NIGHT, True
     elif on_time < off_time:
-        if time_to_check > on_time and time_to_check < off_time:            
+        if time_to_check > on_time and time_to_check < off_time:
             return DAY, True
     elif time_to_check == on_time:
         return None, True
@@ -43,14 +43,14 @@ def send_data(ser):
         line = str.split(l, ":")
         print l
     except:
-        print "Couldn't split string: ", l        
+        print "Couldn't split string: ", l
 
     try:
-        sw.insert_ser_line_old(l);
+        sw.insert_ser_line_old(l)
     except:
         print "Couldn't insert data."
 
-        
+
     now = datetime.datetime.now().time()
     on_time = datetime.time(14, 15)
     off_time = datetime.time(21, 30)
@@ -59,7 +59,7 @@ def send_data(ser):
     if matching:
         if when == DAY:
             print "Daytime; time to send email."
-            should_I_send = True;
+            should_I_send = True
         elif when == NIGHT:
             print "Not a good time for email."
         else:
@@ -67,10 +67,10 @@ def send_data(ser):
     else:
         print now
         print when
-    
+
     if (float(line[4]) < -700) and should_I_send:
         send_email()
-    
+
     params = urllib.urlencode(
         {'field1': line[1],
          'field2': line[2],
@@ -80,10 +80,10 @@ def send_data(ser):
          'field6': line[6],
          'field7': os.getloadavg()[0],
          'key': 'UQ42GIJZ50WRSQXE'})
-    
+
     headers = {"Content-type": "application/x-www-form-urlencoded",
                "Accept": "text/plain"}
-    
+
     conn = httplib.HTTPConnection("api.thingspeak.com:80")
 
     try:
@@ -93,13 +93,13 @@ def send_data(ser):
         data = response.read()
         conn.close()
     except:
-        print "Connection failed"    
-    
+        print "Connection failed"
+
 if __name__ == "__main__":
     ser = serial.Serial('/dev/ttyAMA0', 9600)
     while True:
         try:
             send_data(ser)
-        except:
-            print "Exception"
+        except Exception as e:
+            print "Exception: %s" % e
             send_data(ser)
