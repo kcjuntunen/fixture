@@ -2,8 +2,6 @@ import sqlite3 as sql
 import sys, datetime
 # CREATE TABLE IF NOT EXISTS snapshot_log (id INTEGER PRIMARY KEY ASC, timestamp, obstruction, reed_switch1, reed_switch2, light_level, humidity, temperature, pressure, light_threshold);
 
-# TODO email on light out
-
 class sqlite_writer:
   def __init__(self, db_filename = "./amstore.db"):
     self.db_filename = db_filename
@@ -54,15 +52,8 @@ class sqlite_writer:
   def insert_data(self, obstruct, reed1, reed2, ll, hum, temp, press, thresh):    
     with self.conn:
       cur = self.conn.cursor()
-      cur.execute('INSERT INTO snapshot_log (timestamp, obstruction, reed_switch1, reed_switch2, light_level, humidity, temperature, pressure, light_threshold) VALUES (datetime(\'now\'), \'' +
-                     `obstruct` + '\', \'' +
-                     `reed1` + '\', \'' +
-                     `reed2` + '\', \'' +
-                     `ll` + '\', \'' +
-                     `hum` + '\', \'' +
-                     `temp` + '\', \'' +
-                     `press` + '\', \'' +
-                     `thresh` + '\';')
+      sql = "INSERT INTO snapshot_log (timestamp, obstruction, reed_switch1, reed_switch2, light_level, humidity, temperature, pressure, light_threshold) VALUES (datetime(\'now\'), {0}, {1}, {2}, {3}, {4}, {5}, {6}, {7});".format(obstruct, reed1, reed2, ll, hum, temp, press, thresh)
+      cur.execute(sql)
 
 
   def insert_data_old(self, obstruct, reed1, reed2, ll, hum, temp):    
