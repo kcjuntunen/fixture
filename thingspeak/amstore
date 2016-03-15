@@ -22,8 +22,8 @@ The lights went out in our magic showcase.
         print "Failure sending email. %s" % e
         
 
-def send_data(ser):
-    sw = sqlw.sqlite_writer("/home/pi/amstore.db")
+def send_data(ser, dbf):
+    sw = sqlw.sqlite_writer(dbf)
     try:
         l = ser.readline()
         line = str.split(l, ":")
@@ -46,6 +46,7 @@ def send_data(ser):
          'field5': line[5],
          'field6': line[6],
          'field7': os.getloadavg()[0],
+         'field8': line[7],
          'key': 'UQ42GIJZ50WRSQXE'})
 
     headers = {"Content-type": "application/x-www-form-urlencoded",
@@ -63,10 +64,11 @@ def send_data(ser):
         print "Connection failed"
 
 if __name__ == "__main__":
+    import sys
     ser = serial.Serial('/dev/ttyAMA0', 9600)
     while True:
         try:
-            send_data(ser)
+            send_data(ser, sys.argv[1])
         except Exception as e:
             print "Exception: %s" % e
             send_data(ser)
