@@ -1,112 +1,104 @@
+//#define DEBUG
+#include <Wire.h>
+#include <SFE_BMP180.h>
 #include <dht.h>
-
-const int interruptA = 0;
-// Temp-humidity
+#define ALTITUDE 195
+// Temp-humidity                                                                                                                                                                    
 #define dht_apin A0
-// photo resistor
+// photo resistor                                                                                                                                                                   
 #define phr_apin A1
-// small reed switch
-#define small_reed_apin 5
-// large reed switch
-#define large_reed_apin 6
-// IR/avoidance distance sensor
-#define avoidance_pin 7
-/* Actually, 13 is the onboard led. But it
- * Turns out the device will be "busy" if something is connected
+
+// PIR motion                                                                                                                                                                       
+#define PIR 4
+// small reed switch                                                                                                                                                                
+#define small_reed_apin 6
+// large reed switch                                                                                                                                                                
+#define large_reed_apin 5
+// IR/avoidance distance sensor                                                                                                                                                     
+#define avoidance_pin A2
+/* Actually, 13 is the onboard led. But it                                                                                                                                          
+ * Turns out the device will be "busy" if something is connected                                                                                                                    
  * to pin 13. */
 #define onboard_led 9
-/* Rotary encoder pins
- * It's clear I don't know what I'm doing with this. In the sameple code, 
- * the CLK pin was completely ignored as it is here. It's probably key 
+/* Rotary encoder pins                                                                                                                                                              
+ * It's clear I don't know what I'm doing with this. In the sameple code,                                                                                                           
+ * the CLK pin was completely ignored as it is here. It's probably key                                                                                                              
  * to not getting 5 readings. */
 #define CLK 2
 #define DAT 3
 #define SW 4
 
-const int temp_read = 30;
-const int send_seconds = 15;
-const int reset = 30;
-
-/* This was origally here so the Arduberry could decide whether the 
+/* This was origally here so the Arduberry could decide whether the                                                                                                                 
  * light is on. */
 int light_threshold = 400;
 int count = 0;
 int seconds = 0;
-dht DHT;
+int temp_read = 30;
+int send_seconds = 15;
+int reset = 30;
 
-/* So, if I just pass around pointers to an instance of this struct,
- * then it can be volitile-ish and I can read/print asynchronously.
- */
-struct data_collection {
-  double humidity;
-  double temperature;
-  double light_level;
-  double presence;
-  bool pir;
-  bool small_reed_switch;
-  bool large_reed_switch;
+dht DHT;
+SFE_BMP180 pressure;
+
+
+struct weather_t {
+  float temperature;
+  float humidity;
+  float pressure;
 };
 
+void printdata();
 
-void readdata(struct data_collection* d);
-void readDHT(struct data_collection* d, int seconds);
-void read_light(struct data_collection* d, int seconds);
-void read_presence(struct data_collection* d, int seconds);
-void printdata(struct data_collection* d);
-struct data_collection *dc;
-
-void setup(){
-  attachInterrupt(0, RoteStateChanged, FALLING);
-  while (!Serial);
-  pinMode(CLK, INPUT);
-  digitalWrite(CLK, HIGH);  // Pull High Restance
-  pinMode(DAT, INPUT);
-  digitalWrite(DAT, HIGH);  // Pull High Restance
-  pinMode(SW, INPUT);
-  digitalWrite(SW, HIGH);  // Pull High Restance
-  
-  pinMode(small_reed_apin, INPUT);
-  pinMode(large_reed_apin, INPUT);
-  pinMode(avoidance_pin, INPUT);
-  pinMode(PIR, INPUT);
-  pinMode(onboard_led, OUTPUT);
-  Serial.begin(9600);
-  delay(1000); // Wait before accessing Sensor
-  readDHT(dc, 30); // First read
+bool read_switch() {
+#ifdef DEBUG
+    Serial.println("Gonna read switch");
+#endif
+  return !digitalRead(small_reed_apin);
 }
 
-void loop(){
-  if (!digitalRead(SW)) {
-    count = 0;
-    light_threshold = 400;
-    delay(2000);
-  }
-  light_off();
-  read_light(dc, seconds);
-  read_presence(dc, seconds);
-  readDHT(dc, seconds);
- 
-  readdata(dc);
-  light_on();
-
-  if (seconds % send_seconds == 0) {
-    printdata(dc);
-  }
-
-  /* if (seconds % temp_read == 0) { */
-  /*   seconds = 0; */
-  /* } */
-  
-  seconds++;  
+float read_light() {
+#ifdef DEBUG
+    Serial.println("Gonna read light level");
+#endif
+  return analogRead(phr_apin);
 }
 
-void wait() {
-  for (int i = 0; i < 15; i++) {
-    light_on();
-    light_off();
+float read_presence() {
+#ifdef DEBUG
+    Serial.println("Gonna check for presence");
+#endif
+  return (analogRead(avoidance_pin) * 5.0) / 1024.0;
+}
+
+float read_pressure() {
+#ifdef DEBUG
+    Serial.println("Gonna get hPa");
+#endif
+  char status;
+  double T, P, p0, a;
+  status = pressure.startTemperature();
+  if (status != 0) {
+    delay(status);
+
+    status = pressure.getTemperature(T);
+    if (status != 0) {
+      status = pressure.startPressure(3);
+      if (status != 0) {
+        delay(status);
+        status = pressure.getPressure(P, T);
+
+        p0 = pressure.sealevel(P, ALTITUDE);
+      }
+    }
   }
-  light_on();
-  delay(1000);
+  return p0; 
+}
+
+void read_weather() {
+#ifdef DEBUG
+    Serial.println("Gonna get weather");
+#endif
+  DHT.read11(dht_apin);
 }
 
 void light_on() {
@@ -123,67 +115,60 @@ void light_off() {
   }
 }
 
-void printdata(struct data_collection *d) {
-  // millis:presence:lrs:srs:ll:hum:temp:lt:pir
-  Serial.print(millis()); Serial.print(":");
-  Serial.print(d->presence, DEC); Serial.print(":");
-  Serial.print(d->large_reed_switch); Serial.print(":");
-  Serial.print(d->small_reed_switch); Serial.print(":");
-  Serial.print(d->light_level * -1.0, DEC); Serial.print(":");
-  Serial.print(d->humidity, DEC); Serial.print(":");
-  Serial.print(d->temperature, DEC); Serial.print(":");
-  Serial.print(light_threshold, DEC); Serial.print(":");
-  Serial.println(d->pir, DEC);
-}
 
-void readdata(struct data_collection *d) {
-  d->small_reed_switch = !digitalRead(small_reed_apin);
-  d->large_reed_switch = digitalRead(large_reed_apin);
-  d->presence = (analogRead(avoidance_pin) * 5.0) / 1024.0;
-  d->pir = digitalRead(PIR);
-}
-
-void read_light(struct data_collection* d, int seconds) {
-  if (seconds % reset != 0) {
-    d->light_level = (d->light_level + analogRead(phr_apin)) / 2;
-  } else {
-    d->light_level = analogRead(phr_apin);
-  }
-}
-
-void read_presence(struct data_collection* d, int seconds) {
-  double rdg = (analogRead(avoidance_pin) * 5.0) / 1024.0;
-  if (seconds % reset != 0) {
-    d->presence = (d->presence + rdg) / 2;
-  } else {
-    d->presence = rdg;
-  }
-}
-
-void readDHT(struct data_collection *d, int seconds) {
-  if (seconds % temp_read == 0) {
-    DHT.read11(dht_apin);
-    d->humidity = DHT.humidity;
-    d->temperature = ((9.0/5.0) * DHT.temperature) + 32;
-  }
-}
-
-void RoteStateChanged() {
-  int v = digitalRead(DAT);
-  light_on();
-  delay(100);
+void setup(){
+  while (!Serial);
+  Serial.println("Setting up.");
+  pinMode(small_reed_apin, INPUT);
+  // pinMode(large_reed_apin, INPUT);
+  pinMode(avoidance_pin, INPUT);
+  // pinMode(PIR, INPUT);
+  pinMode(onboard_led, OUTPUT);
+  Serial.begin(9600);
+  pressure.begin();
+  delay(1000);
   light_off();
-  if (v < 1) {
-    count++;
-    if (light_threshold < 512) {
-      light_threshold += 10;
-    }
-  } else {
-    count--;
-    if (light_threshold > 0) {
-      light_threshold -= 10;
-    }
-  }
-  //Serial.println(count);
+  light_on();
 }
 
+void loop(){
+  light_off();
+  if (seconds % send_seconds == 0) {
+#ifdef DEBUG
+    Serial.println("Gonna print");
+#endif
+    printdata();
+  }
+
+  if (seconds % temp_read == 0) {
+    seconds = 0;
+  }
+  
+  light_on();
+  seconds++;  
+}
+
+void wait() {
+  for (int i = 0; i < 15; i++) {
+    light_on();
+    light_off();
+  }
+  light_on();
+  delay(1000);
+}
+
+void printdata() {
+  // millis:presence:lrs:srs:ll:hum:temp:lt:pir
+  DHT.read11(dht_apin);
+  Serial.print(millis()); Serial.print(":");
+  Serial.print(read_presence(), DEC); Serial.print(":"); //0?                                                                                                                           
+  Serial.print(0, DEC); Serial.print(":");
+  Serial.print(read_switch(), DEC); Serial.print(":");
+  Serial.print(read_light() * -1.0, DEC); Serial.print(":"); //0?                                                                                                                       
+  Serial.print(DHT.humidity, DEC); Serial.print(":");
+  float t = (9.0/5.0) * DHT.temperature + 32;
+  Serial.print(t); Serial.print(":");
+  Serial.print(read_pressure(), DEC); Serial.print(":"); //0?                                                                                                                               
+  Serial.print(light_threshold, DEC); Serial.print(":");
+  Serial.println(0);
+}
