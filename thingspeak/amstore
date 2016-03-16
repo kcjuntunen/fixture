@@ -121,8 +121,11 @@ def send_data(ser, dbf):
 
 if __name__ == "__main__":
     global config_data
-    # import sys
+    import ip
     import json
+
+    ip.broadcast_ip()
+    
     with open('/etc/thingspeak.json') as data_file:
          config_data = json.load(data_file)
 
