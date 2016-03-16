@@ -3,11 +3,51 @@ import httplib, urllib, os
 import datetime
 import serial, smtplib
 import sqlite_writer as sqlw
+import utility as u
+
+sent = False
+
+def tweet(message):
+    global sent
+    now = datetime.datetime.now().time()
+    on_time = datetime.time(10, 00)
+    off_time = datetime.time(21, 30)
+    when, matching = u.check_time(now, on_time, off_time)
+    should_I_send = False
+    if matching:
+        global config_data
+        if when == u.DAY:
+            print "We shall tweet."
+            should_I_send = True
+        elif when == u.NIGHT:
+            print "We shall not tweet."
+        else:
+            print "WTH?"
+
+        params = urllib.urlencode(
+            {'api_key': config_data["api_key"],
+             'status': message})
+
+        headers = {"Content-type": "application/x-www-form-urlencoded",
+               "Accept": "text/plain"}
+
+        conn = httplib.HTTPConnection("api.thingspeak.com:80")
+
+    if should_I_send:
+        try:
+            conn.request("POST", "/apps/thingtweet/1/statuses/update", params, headers)
+            response = conn.getresponse()
+            print response.status, response.reason
+            data = response.read()
+            conn.close()
+        except:
+            print "Tweet connection failed"
+
 
 def send_email():
     print "Attempting to send email"
     try:
-        sender = 'kcjuntunen@amstore.com'
+        sender = config_data["sender"]
         receivers = ['rvansluyters@amstore.com', 'juntunen.kc@gmail.com']
         message = """From: Raspberry Pi <no_real_email@nobody.com>
 To: Ryan <rvansluyters@amstore.com>, K. C. <juntunen.kc@gmail.com>
@@ -15,7 +55,7 @@ Subject: Alert!
 
 The lights went out in our magic showcase.
 """
-        smtpo = smtplib.SMTP('mail2.amstore.com')
+        smtpo = smtplib.SMTP(config_data["smtp_server"])
         smtpo.sendmail(sender, receivers, message)
         print "Sent"
     except Exception, e:
@@ -23,6 +63,7 @@ The lights went out in our magic showcase.
         
 
 def send_data(ser, dbf):
+    global sent
     sw = sqlw.sqlite_writer(dbf)
     try:
         l = ser.readline()
@@ -38,8 +79,7 @@ def send_data(ser, dbf):
     except:
         print "Couldn't insert data."
 
-    params = urllib.urlencode(
-        {'field1': line[1],
+    paramsd = {'field1': line[1],
          'field2': line[2],
          'field3': line[3],
          'field4': line[4],
@@ -47,7 +87,23 @@ def send_data(ser, dbf):
          'field6': line[6],
          'field7': os.getloadavg()[0],
          'field8': line[7],
-         'key': 'UQ42GIJZ50WRSQXE'})
+         'key': config_data["key"]}
+
+    if float(line[4]) < -700 and not sent:
+        today = datetime.datetime.now()
+        paramsd['status'] = "Lights are out."
+        tweet("The lights are out in {0}. ({1} UTC)".format(config_data["unit"], today.strftime('%b %d %Y %H:%M')))
+        sent = True
+
+
+    if (float(line[4]) > -700) and sent:
+        today = datetime.datetime.now()
+        paramsd['status'] = "Lights are back on."
+        tweet("The lights are back on in {0}. ({1} UTC)".format(config_data["unit"], today.strftime('%b %d %Y %H:%M')))
+        sent = False    
+
+    params = urllib.urlencode(paramsd)
+
 
     headers = {"Content-type": "application/x-www-form-urlencoded",
                "Accept": "text/plain"}
@@ -64,11 +120,17 @@ def send_data(ser, dbf):
         print "Connection failed"
 
 if __name__ == "__main__":
-    import sys
+    global config_data
+    # import sys
+    import json
+    with open('/etc/thingspeak.json') as data_file:
+         config_data = json.load(data_file)
+
     ser = serial.Serial('/dev/ttyAMA0', 9600)
+    database_file = config_data["localDB"]
     while True:
         try:
-            send_data(ser, sys.argv[1])
+            send_data(ser, database_file)
         except Exception as e:
             print "Exception: %s" % e
-            send_data(ser)
+            send_data(ser, database_file)
