@@ -125,8 +125,8 @@ if __name__ == "__main__":
     import json
     import time
 
-    while 'wlan0' not in ip.all_interfaces():
-        time.sleep(15)
+    #while 'wlan0' not in ip.all_interfaces():
+    #    time.sleep(15)
 
     ip.broadcast_ip()
 
