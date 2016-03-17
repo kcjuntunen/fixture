@@ -5,11 +5,12 @@ import serial, smtplib
 import sqlite_writer as sqlw
 import utility as u
 
-sent = False
+sent_off = False
+sent_on  = True
 
 def tweet(message):
     global config_data
-    global sent
+
     params = urllib.urlencode(
         {'api_key': config_data["api_key"],
          'status': message})
@@ -29,12 +30,13 @@ def tweet(message):
         print response.status, response.reason
         data = response.read()
         conn.close()
+        return True
     except:
         print "Tweet connection failed"
+        return False
 
 
 def send_email(subj, msg):
-    print "Attempting to send email"
     try:
         sender = config_data["sender"]
         receivers = config_data["recipients"]
@@ -55,13 +57,13 @@ def send_email(subj, msg):
         message += msg + "\n"
         smtpo = smtplib.SMTP(config_data["smtp_server"])
         smtpo.sendmail(sender, receivers, message)
-        print "Sent email"
     except Exception, e:
         print "Failure sending email. %s" % e
 
 
 def send_data(ser, dbf):
-    global sent
+    global sent_on
+    global sent_off
     sw = sqlw.sqlite_writer(dbf)
     try:
         l = ser.readline()
@@ -87,20 +89,25 @@ def send_data(ser, dbf):
          'field8': line[7],
          'key': config_data["key"]}
 
-    if float(line[4]) < config_data["light_threshold"] and not sent:
+    if float(line[4]) < config_data["light_threshold"] and not sent_off:
         today = datetime.datetime.now()
         paramsd['status'] = "Lights are out."
-        tweet("The lights are out in {0}. ({1} UTC)".format(
-            config_data["unit"], today.strftime('%b %d %Y %H:%M')))
-        sent = True
+        msg = "The lights are out in {0}. ({1} UTC)".format(
+            config_data["unit"], today.strftime('%b %d %Y %H:%M'))
+        tw = tweet(msg)
+        sw.insert_alert("Lights are out.", 0, tw, 1)
+        sent_off = True
+        sent_on = False
 
 
-    if (float(line[4]) > config_data["light_threshold"]) and sent:
+    if (float(line[4]) > config_data["light_threshold"]) and not sent_on:
         today = datetime.datetime.now()
         paramsd['status'] = "Lights are back on."
-        tweet("The lights are back on in {0}. ({1} UTC)".format(
+        tw = tweet("The lights are back on in {0}. ({1} UTC)".format(
             config_data["unit"], today.strftime('%b %d %Y %H:%M')))
-        sent = False
+        sw.insert_alert("Lights are back on.", 0, tw, 1)
+        sent_on = True
+        sent_off = False
 
     params = urllib.urlencode(paramsd)
 

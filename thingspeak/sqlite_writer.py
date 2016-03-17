@@ -2,6 +2,8 @@ import sqlite3 as sql
 import sys, datetime
 # CREATE TABLE IF NOT EXISTS snapshot_log (id INTEGER PRIMARY KEY ASC, timestamp, obstruction, reed_switch1, reed_switch2, light_level, humidity, temperature, pressure, light_threshold);
 
+# CREATE TABLE IF NOT EXISTS message_log (id INTEGER PRIMART KEY ASC, timestamp, message, email, tweet, status)
+
 class sqlite_writer:
   def __init__(self, db_filename = "./amstore.db"):
     self.db_filename = db_filename
@@ -11,21 +13,22 @@ class sqlite_writer:
     except sql.Error, e:
       print "Error %s:" % e.args[0]
       sys.exit(1)
-      
+
     try:
-      if not len(self.show_tables()):        
-        self.create_table()        
+      if not len(self.show_tables()) > 1:
+        self.create_table()
+        self.create_message_table()
     except sql.Error, e:
       print "Error %s:" % e.args[0]
       sys.exit(1)
 
   def __del__(self):
     self.conn.close()
-    
+
   def get_db_version(self):
     with self.conn:
       cur = self.conn.cursor()
-      cur.execute('SELECT SQLITE_VERSION()')    
+      cur.execute('SELECT SQLITE_VERSION()')
       data = cur.fetchone()
       return "SQLite version: %s" % data
 
@@ -43,20 +46,34 @@ class sqlite_writer:
       for x in self.show_tables():
         cnt += 1
         print ("{0}.) {1}".format(cnt, x[0]))
-        
+
   def create_table(self):
     with self.conn:
       cur = self.conn.cursor()
       cur.execute('CREATE TABLE IF NOT EXISTS snapshot_log (id INTEGER PRIMARY KEY ASC, timestamp, obstruction, reed_switch1, reed_switch2, light_level, humidity, temperature, pressure, light_threshold);')
-    
-  def insert_data(self, obstruct, reed1, reed2, ll, hum, temp, press, thresh):    
+
+  def create_message_table(self):
+    with self.conn:
+      cur = self.conn.cursor()
+      cur.execute('CREATE TABLE IF NOT EXISTS message_log (id INTEGER PRIMART KEY ASC, timestamp, message, email, tweet, status)')
+
+  def insert_data(self, obstruct, reed1, reed2, ll, hum, temp, press, thresh):
     with self.conn:
       cur = self.conn.cursor()
       sql = "INSERT INTO snapshot_log (timestamp, obstruction, reed_switch1, reed_switch2, light_level, humidity, temperature, pressure, light_threshold) VALUES (datetime(\'now\'), {0}, {1}, {2}, {3}, {4}, {5}, {6}, {7});".format(obstruct, reed1, reed2, ll, hum, temp, press, thresh)
       cur.execute(sql)
 
+  def insert_alert(self, msg, email, tweet, stat):
+    with self.conn:
+      cur = self.conn.cursor()
+      sql = "INSERT INTO message_log (timestamp, message, email, tweet, status) VALUES (datetime(\'now\'), {0}, {1}, {2}, {3});".format(msg, email, tweet, stat)
 
-  def insert_data_old(self, obstruct, reed1, reed2, ll, hum, temp):    
+      try:
+        cur.execute(sql)
+      except:
+        print ("Couldn't insert\nsql={0}".format(sql))
+
+  def insert_data_old(self, obstruct, reed1, reed2, ll, hum, temp):
     with self.conn:
       cur = self.conn.cursor()
       sql = "INSERT INTO snapshot_log (timestamp, obstruction, reed_switch1, reed_switch2, light_level, humidity, temperature) VALUES (datetime(\'now\'), {0}, {1}, {2}, {3}, {4}, {5});".format(obstruct, reed1, reed2, ll, hum, temp)
