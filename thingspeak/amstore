@@ -87,7 +87,7 @@ def send_data(ser, dbf):
          'field8': line[7],
          'key': config_data["key"]}
 
-    if float(line[4]) < -700 and not sent:
+    if float(line[4]) < config_data["light_threshold"] and not sent:
         today = datetime.datetime.now()
         paramsd['status'] = "Lights are out."
         tweet("The lights are out in {0}. ({1} UTC)".format(
@@ -95,7 +95,7 @@ def send_data(ser, dbf):
         sent = True
 
 
-    if (float(line[4]) > -700) and sent:
+    if (float(line[4]) > config_data["light_threshold"]) and sent:
         today = datetime.datetime.now()
         paramsd['status'] = "Lights are back on."
         tweet("The lights are back on in {0}. ({1} UTC)".format(
