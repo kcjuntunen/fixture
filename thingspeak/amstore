@@ -8,40 +8,25 @@ import utility as u
 sent = False
 
 def tweet(message):
+    global config_data
     global sent
-    now = datetime.datetime.now().time()
-    on_time = datetime.time(10, 00)
-    off_time = datetime.time(21, 30)
-    when, matching = u.check_time(now, on_time, off_time)
-    should_I_send = False
-    if matching:
-        global config_data
-        if when == u.DAY:
-            print "We shall tweet."
-            should_I_send = True
-        elif when == u.NIGHT:
-            print "We shall not tweet."
-        else:
-            print "WTH?"
-
-        params = urllib.urlencode(
-            {'api_key': config_data["api_key"],
-             'status': message})
+    params = urllib.urlencode(
+        {'api_key': config_data["api_key"],
+         'status': message})
 
         headers = {"Content-type": "application/x-www-form-urlencoded",
                "Accept": "text/plain"}
 
         conn = httplib.HTTPConnection("api.thingspeak.com:80")
 
-    if should_I_send:
-        try:
-            conn.request("POST", "/apps/thingtweet/1/statuses/update", params, headers)
-            response = conn.getresponse()
-            print response.status, response.reason
-            data = response.read()
-            conn.close()
-        except:
-            print "Tweet connection failed"
+    try:
+        conn.request("POST", "/apps/thingtweet/1/statuses/update", params, headers)
+        response = conn.getresponse()
+        print response.status, response.reason
+        data = response.read()
+        conn.close()
+    except:
+        print "Tweet connection failed"
 
 
 def send_email(subj, msg):
@@ -55,7 +40,7 @@ def send_email(subj, msg):
         rec_cnt = len(receivers)
         cnt = 1
         for s in receivers:
-            message += "<", s
+            message += "<" + s
             message += ">"
             if cnt < rec_cnt:
               message += ", "
@@ -132,7 +117,11 @@ if __name__ == "__main__":
     global config_data
     import ip
     import json
-
+    import time
+    
+    while 'wlan0' not in ip.all_interfaces():
+        time.sleep(15)
+        
     ip.broadcast_ip()
     
     with open('/etc/thingspeak.json') as data_file:
