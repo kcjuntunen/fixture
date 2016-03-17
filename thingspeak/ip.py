@@ -21,7 +21,7 @@ def send_email(subj, msg):
             if cnt < rec_cnt:
                 message += ", "
 
-        message += "Subject: "
+        message += "\nSubject: "
 
         message += subj + "\n\n"
         message += msg + "\n"
