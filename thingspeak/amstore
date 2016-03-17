@@ -14,13 +14,17 @@ def tweet(message):
         {'api_key': config_data["api_key"],
          'status': message})
 
-        headers = {"Content-type": "application/x-www-form-urlencoded",
+    headers = {"Content-type": "application/x-www-form-urlencoded",
                "Accept": "text/plain"}
 
-        conn = httplib.HTTPConnection("api.thingspeak.com:80")
+    conn = httplib.HTTPConnection("api.thingspeak.com:80")
 
     try:
-        conn.request("POST", "/apps/thingtweet/1/statuses/update", params, headers)
+        conn.request("POST",
+                     "/apps/thingtweet/1/statuses/update",
+                     params,
+                     headers)
+
         response = conn.getresponse()
         print response.status, response.reason
         data = response.read()
@@ -54,7 +58,7 @@ def send_email(subj, msg):
         print "Sent email"
     except Exception, e:
         print "Failure sending email. %s" % e
-        
+
 
 def send_data(ser, dbf):
     global sent
@@ -86,15 +90,17 @@ def send_data(ser, dbf):
     if float(line[4]) < -700 and not sent:
         today = datetime.datetime.now()
         paramsd['status'] = "Lights are out."
-        tweet("The lights are out in {0}. ({1} UTC)".format(config_data["unit"], today.strftime('%b %d %Y %H:%M')))
+        tweet("The lights are out in {0}. ({1} UTC)".format(
+            config_data["unit"], today.strftime('%b %d %Y %H:%M')))
         sent = True
 
 
     if (float(line[4]) > -700) and sent:
         today = datetime.datetime.now()
         paramsd['status'] = "Lights are back on."
-        tweet("The lights are back on in {0}. ({1} UTC)".format(config_data["unit"], today.strftime('%b %d %Y %H:%M')))
-        sent = False    
+        tweet("The lights are back on in {0}. ({1} UTC)".format(
+            config_data["unit"], today.strftime('%b %d %Y %H:%M')))
+        sent = False
 
     params = urllib.urlencode(paramsd)
 
@@ -118,12 +124,12 @@ if __name__ == "__main__":
     import ip
     import json
     import time
-    
+
     while 'wlan0' not in ip.all_interfaces():
         time.sleep(15)
-        
+
     ip.broadcast_ip()
-    
+
     with open('/etc/thingspeak.json') as data_file:
          config_data = json.load(data_file)
 
