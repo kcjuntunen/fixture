@@ -10,7 +10,7 @@ def send_email(subj, msg):
     try:
         sender = config_data["sender"]
         receivers = config_data["recipients"]
-        message = "From: Raspberry Pi <no_real_email@nobody.com>"
+        message = "From: " + config_data["unit"]  + " <no_real_email@nobody.com>"
         message += "\nTo: "
 
         rec_cnt = len(receivers)
@@ -27,7 +27,7 @@ def send_email(subj, msg):
         message += msg + "\n"
         smtpo = smtplib.SMTP(config_data["smtp_server"])
         smtpo.sendmail(sender, receivers, message)
-        print "Sent email"
+        #print "Sent email"
     except Exception, e:
         print "Failure sending email. %s" % e
 

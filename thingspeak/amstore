@@ -27,7 +27,7 @@ def tweet(message):
                      headers)
 
         response = conn.getresponse()
-        print response.status, response.reason
+        #print response.status, response.reason
         data = response.read()
         conn.close()
         return True
@@ -40,7 +40,7 @@ def send_email(subj, msg):
     try:
         sender = config_data["sender"]
         receivers = config_data["recipients"]
-        message = "From: Raspberry Pi <no_real_email@nobody.com>"
+        message = "From: " + config_data["unit"]  + " <no_real_email@nobody.com>"
         message += "\nTo: "
 
         rec_cnt = len(receivers)
@@ -68,7 +68,7 @@ def send_data(ser, dbf):
     try:
         l = ser.readline()
         line = str.split(l, ":")
-        print l
+        #print l
     except:
         print "Couldn't split string: "
         if l:
@@ -89,25 +89,27 @@ def send_data(ser, dbf):
          'field8': line[7],
          'key': config_data["key"]}
 
-    if float(line[4]) < config_data["light_threshold"] and not sent_off:
-        today = datetime.datetime.now()
-        paramsd['status'] = "Lights are out."
-        msg = "The lights are out in {0}. ({1} UTC)".format(
-            config_data["unit"], today.strftime('%b %d %Y %H:%M'))
-        tw = tweet(msg)
-        sw.insert_alert("Lights are out.", 0, tw, 1)
-        sent_off = True
-        sent_on = False
+    if float(line[4]) < float(config_data["light_threshold"]):
+        if not sent_off:
+            today = datetime.datetime.now()
+            paramsd['status'] = "Lights are out."
+            msg = "The lights are out in {0}. ({1} UTC)".format(
+                config_data["unit"], today.strftime('%b %d %Y %H:%M'))
+            tw = tweet(msg)
+            sw.insert_alert("Lights are out.", 0, tw, 1)
+            sent_off = True
+            sent_on = False
 
 
-    if (float(line[4]) > config_data["light_threshold"]) and not sent_on:
-        today = datetime.datetime.now()
-        paramsd['status'] = "Lights are back on."
-        tw = tweet("The lights are back on in {0}. ({1} UTC)".format(
-            config_data["unit"], today.strftime('%b %d %Y %H:%M')))
-        sw.insert_alert("Lights are back on.", 0, tw, 1)
-        sent_on = True
-        sent_off = False
+    if (float(line[4]) > float(config_data["light_threshold"])):
+        if not sent_on:
+            today = datetime.datetime.now()
+            paramsd['status'] = "Lights are back on."
+            tw = tweet("The lights are back on in {0}. ({1} UTC)".format(
+                config_data["unit"], today.strftime('%b %d %Y %H:%M')))
+            sw.insert_alert("Lights are back on.", 0, tw, 1)
+            sent_on = True
+            sent_off = False
 
     params = urllib.urlencode(paramsd)
 
@@ -120,7 +122,7 @@ def send_data(ser, dbf):
     try:
         conn.request("POST", "/update", params, headers)
         response = conn.getresponse()
-        print response.status, response.reason
+        #print response.status, response.reason
         data = response.read()
         conn.close()
     except:
