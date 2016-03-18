@@ -1,3 +1,6 @@
+import datetime
+import unicodedata
+
 DAY, NIGHT = 1, 2
 
 def check_time(time_to_check, on_time, off_time):
@@ -12,24 +15,28 @@ def check_time(time_to_check, on_time, off_time):
 
     return None, False
 
-  
+def ok_to_send(day_start, day_end):
+    now = datetime.datetime.now().time()
+    dstart = str.split(
+        unicodedata.normalize(
+            'NFKD', day_start).encode(
+                'ascii', 'ignore'), ":")
 
-    # now = datetime.datetime.now().time()
-    # on_time = datetime.time(14, 15)
-    # off_time = datetime.time(21, 30)
-    # when, matching = check_time(now, on_time, off_time)
-    # should_I_send = False
-    # if matching:
-    #     if when == DAY:
-    #         print "Daytime; time to send email."
-    #         should_I_send = True
-    #     elif when == NIGHT:
-    #         print "Not a good time for email."
-    #     else:
-    #         print "WTH?"
-    # else:
-    #     print now
-    #     print when
+    dend = str.split(
+        unicodedata.normalize(
+            'NFKD', day_end).encode(
+                'ascii', 'ignore'), ":")
 
-    # if (float(line[4]) < -700) and should_I_send:
-    #     send_email()
+    on_time = datetime.time(int(day_start[0]), int(day_start[1]))
+    off_time = datetime.time(int(day_end[0]), int(day_end[1]))
+    when, matching = check_time(now, on_time, off_time)
+    should_I_send = False
+    if matching:
+        if when == DAY:
+            return True
+        elif when == NIGHT:
+            return False
+        else:
+            return False
+    else:
+        return False

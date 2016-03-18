@@ -15,6 +15,8 @@ class monitor():
             self.sender = self.config_data["sender"]
             self.recipients = self.config_data["recipients"]
             self.threshold = self.config_data["light_threshold"]
+            self.day_start = self.config_data["day_start"]
+            self.day_end = self.config_data["day_end"]
             self.ser = serial.Serial(self.config_data["serial_port"],
                                      self.config_data["baud"])
             self.sw = sqlw.sqlite_writer(self.local_db)
@@ -46,6 +48,8 @@ class monitor():
             sw.insert_alert("Tweet connection failed", 0, 0, 0)
             return False
 
+    def ok_to_send(self):
+        return u.ok_to_send(self.day_start, self.day_end)
 
     def send_email(self, subj, msg):
         try:
@@ -68,9 +72,11 @@ class monitor():
             message += msg + "\n"
             smtpo = smtplib.SMTP(self.smtp_server)
             smtpo.sendmail(sender, receivers, message)
+            return True
         except Exception, e:
             self.sw.insert_alert("Failure sending email: {0}"
                                  .format(e), 0, 0, 0)
+            return False
 
     def send_data(self):
         try:
@@ -103,12 +109,14 @@ class monitor():
                 paramsd['status'] = "Lights are out."
                 msg = "The lights are out in {0}. ({1} UTC)".format(
                     self.unit, today.strftime('%b %d %Y %H:%M'))
-                tw = self.tweet(msg)
-
                 t = 0
-                if tw:
+                if self.tweet(msg):
                     t = 1
-                self.sw.insert_alert("Lights are out.", 0, t, 1)
+                e = 0
+                if self.ok_to_send() and self.send_email(paramsd['status'], msg):
+                    e = 1
+
+                self.sw.insert_alert("Lights are out.", e, t, 1)
                 self.sent_off = True
                 self.sent_on = False
 
@@ -116,11 +124,14 @@ class monitor():
             if not self.sent_on:
                 today = datetime.datetime.now()
                 paramsd['status'] = "Lights are back on."
-                tw = self.tweet("The lights are back on in {0}. ({1} UTC)".format(
-                    self.unit, today.strftime('%b %d %Y %H:%M')))
+                msg = "The lights are back on in {0}. ({1} UTC)".format(
+                    self.unit, today.strftime('%b %d %Y %H:%M'))
                 t = 0
-                if tw:
+                if self.tweet(msg):
                     t = 1
+                e = 0
+                if self.ok_to_send() and self.send_email(paramsd['status'], msg):
+                    e = 1
 
                 self.sw.insert_alert("Lights are back on.", 0, t, 1)
                 self.sent_on = True
