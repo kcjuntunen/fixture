@@ -20,8 +20,7 @@ class monitor():
             self.ser = serial.Serial(self.config_data["serial_port"],
                                      self.config_data["baud"])
             self.sw = sqlw.sqlite_writer(self.local_db)
-
-            self.sent_on = False
+            self.sent_on = True
             self.sent_off = False
 
     def tweet(self, message):
