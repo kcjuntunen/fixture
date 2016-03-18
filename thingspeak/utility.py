@@ -1,4 +1,5 @@
 import datetime
+import unicodedata
 
 DAY, NIGHT = 1, 2
 
@@ -16,8 +17,16 @@ def check_time(time_to_check, on_time, off_time):
 
 def ok_to_send(day_start, day_end):
     now = datetime.datetime.now().time()
-    dstart = str.split(day_start, ":")
-    dend = str.split(day_end, ":")
+    dstart = str.split(
+        unicodedata.normalize(
+            'NFKD', day_start).encode(
+                'ascii', 'ignore'), ":")
+
+    dend = str.split(
+        unicodedata.normalize(
+            'NFKD', day_end).encode(
+                'ascii', 'ignore'), ":")
+
     on_time = datetime.time(int(dstart[0]), int(dstart[1]))
     off_time = datetime.time(int(dend[0]), int(dend[1]))
     when, matching = check_time(now, on_time, off_time)
