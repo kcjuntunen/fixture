@@ -22,8 +22,8 @@ class sqlite_writer:
       print "Error %s:" % e.args[0]
       sys.exit(1)
 
-  def __del__(self):
-    self.conn.close()
+  #def __del__(self):
+    #self.conn.close()
 
   def get_db_version(self):
     with self.conn:
@@ -66,7 +66,7 @@ class sqlite_writer:
   def insert_alert(self, msg, email, tweet, stat):
     with self.conn:
       cur = self.conn.cursor()
-      sql = "INSERT INTO message_log (timestamp, message, email, tweet, status) VALUES (datetime(\'now\'), {0}, {1}, {2}, {3});".format(msg, email, tweet, stat)
+      sql = "INSERT INTO message_log (timestamp, message, email, tweet, status) VALUES (datetime(\'now\'), \"{0}\", {1}, {2}, {3});".format(msg, email, tweet, stat)
 
       try:
         cur.execute(sql)
