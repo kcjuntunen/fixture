@@ -65,7 +65,7 @@ class monitor():
                 if cnt < rec_cnt:
                     message += ", "
 
-            message += "Subject: "
+            message += "\nSubject: "
 
             message += subj + "\n\n"
             message += msg + "\n"
