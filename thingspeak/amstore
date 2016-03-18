@@ -1,152 +1,157 @@
 #!/usr/bin/env python
-import httplib, urllib, os
-import datetime
-import serial, smtplib
+import httplib, urllib, os, datetime, serial, smtplib, json
 import sqlite_writer as sqlw
 import utility as u
 
-sent_off = False
-sent_on  = True
+class monitor():
+    def __init__(self, config_file = '/etc/thingspeak.json'):
+        with open('/etc/thingspeak.json') as data_file:
+            self.config_data = json.load(data_file)
+            self.local_db = self.config_data["localDB"]
+            self.key = self.config_data["key"]
+            self.api_key = self.config_data["api_key"]
+            self.unit = self.config_data["unit"]
+            self.smtp_server = self.config_data["smtp_server"]
+            self.sender = self.config_data["sender"]
+            self.recipients = self.config_data["recipients"]
+            self.threshold = self.config_data["light_threshold"]
+            self.ser = serial.Serial(self.config_data["serial_port"],
+                                     self.config_data["baud"])
+            self.sw = sqlw.sqlite_writer(self.local_db)
 
-def tweet(message):
-    global config_data
+            self.sent_on = False
+            self.sent_off = False
 
-    params = urllib.urlencode(
-        {'api_key': config_data["api_key"],
-         'status': message})
+    def tweet(self, message):
+        params = urllib.urlencode(
+            {'api_key': self.api_key,
+             'status': message})
 
-    headers = {"Content-type": "application/x-www-form-urlencoded",
-               "Accept": "text/plain"}
+        headers = {"Content-type": "application/x-www-form-urlencoded",
+                   "Accept": "text/plain"}
 
-    conn = httplib.HTTPConnection("api.thingspeak.com:80")
+        conn = httplib.HTTPConnection("api.thingspeak.com:80")
 
-    try:
-        conn.request("POST",
-                     "/apps/thingtweet/1/statuses/update",
-                     params,
-                     headers)
+        try:
+            conn.request("POST",
+                         "/apps/thingtweet/1/statuses/update",
+                         params,
+                         headers)
 
-        response = conn.getresponse()
-        #print response.status, response.reason
-        data = response.read()
-        conn.close()
-        return True
-    except:
-        print "Tweet connection failed"
-        return False
-
-
-def send_email(subj, msg):
-    try:
-        sender = config_data["sender"]
-        receivers = config_data["recipients"]
-        message = "From: " + config_data["unit"]  + " <no_real_email@nobody.com>"
-        message += "\nTo: "
-
-        rec_cnt = len(receivers)
-        cnt = 1
-        for s in receivers:
-            message += "<" + s
-            message += ">"
-            if cnt < rec_cnt:
-              message += ", "
-
-        message += "Subject: "
-
-        message += subj + "\n\n"
-        message += msg + "\n"
-        smtpo = smtplib.SMTP(config_data["smtp_server"])
-        smtpo.sendmail(sender, receivers, message)
-    except Exception, e:
-        print "Failure sending email. %s" % e
+            response = conn.getresponse()
+            data = response.read()
+            conn.close()
+            return True
+        except:
+            sw.insert_alert("Tweet connection failed", 0, 0, 0)
+            return False
 
 
-def send_data(ser, dbf):
-    global sent_on
-    global sent_off
-    sw = sqlw.sqlite_writer(dbf)
-    try:
-        l = ser.readline()
-        line = str.split(l, ":")
-        #print l
-    except:
-        print "Couldn't split string: "
-        if l:
-            print l
+    def send_email(self, subj, msg):
+        try:
+            sender = self.sender
+            receivers = self.recipients
+            message = "From: " + self.unit  + " <no_real_email@nobody.com>"
+            message += "\nTo: "
 
-    try:
-        sw.insert_ser_line(l)
-    except:
-        print "Couldn't insert data."
+            rec_cnt = len(receivers)
+            cnt = 1
+            for s in receivers:
+                message += "<" + s
+                message += ">"
+                if cnt < rec_cnt:
+                    message += ", "
 
-    paramsd = {'field1': line[1],
-         'field2': line[2],
-         'field3': line[3],
-         'field4': line[4],
-         'field5': line[5],
-         'field6': line[6],
-         'field7': os.getloadavg()[0],
-         'field8': line[7],
-         'key': config_data["key"]}
+            message += "Subject: "
 
-    if float(line[4]) < float(config_data["light_threshold"]):
-        if not sent_off:
-            today = datetime.datetime.now()
-            paramsd['status'] = "Lights are out."
-            msg = "The lights are out in {0}. ({1} UTC)".format(
-                config_data["unit"], today.strftime('%b %d %Y %H:%M'))
-            tw = tweet(msg)
-            sw.insert_alert("Lights are out.", 0, tw, 1)
-            sent_off = True
-            sent_on = False
+            message += subj + "\n\n"
+            message += msg + "\n"
+            smtpo = smtplib.SMTP(self.smtp_server)
+            smtpo.sendmail(sender, receivers, message)
+        except Exception, e:
+            self.sw.insert_alert("Failure sending email: {0}"
+                                 .format(e), 0, 0, 0)
+
+    def send_data(self):
+        try:
+            l = self.ser.readline()
+            line = str.split(l, ":")
+        except:
+            msg = "Couldn't split string: "
+            if l:
+                msg += l
+            self.sw.insert_alert(msg, 0, 0, 0);
+
+        try:
+            self.sw.insert_ser_line(l)
+        except:
+            print "Couldn't insert data."
+
+        paramsd = {'field1': line[1],
+                   'field2': line[2],
+                   'field3': line[3],
+                   'field4': line[4],
+                   'field5': line[5],
+                   'field6': line[6],
+                   'field7': os.getloadavg()[0],
+                   'field8': line[7],
+                   'key': self.key}
+
+        if float(line[4]) < self.threshold:
+            if not self.sent_off:
+                today = datetime.datetime.now()
+                paramsd['status'] = "Lights are out."
+                msg = "The lights are out in {0}. ({1} UTC)".format(
+                    self.unit, today.strftime('%b %d %Y %H:%M'))
+                tw = self.tweet(msg)
+
+                t = 0
+                if tw:
+                    t = 1
+                self.sw.insert_alert("Lights are out.", 0, t, 1)
+                self.sent_off = True
+                self.sent_on = False
+
+        if float(line[4]) > self.threshold:
+            if not self.sent_on:
+                today = datetime.datetime.now()
+                paramsd['status'] = "Lights are back on."
+                tw = self.tweet("The lights are back on in {0}. ({1} UTC)".format(
+                    self.unit, today.strftime('%b %d %Y %H:%M')))
+                t = 0
+                if tw:
+                    t = 1
+
+                self.sw.insert_alert("Lights are back on.", 0, t, 1)
+                self.sent_on = True
+                self.sent_off = False
+
+        params = urllib.urlencode(paramsd)
+
+        headers = {"Content-type": "application/x-www-form-urlencoded",
+                   "Accept": "text/plain"}
+
+        conn = httplib.HTTPConnection("api.thingspeak.com:80")
+
+        try:
+            conn.request("POST", "/update", params, headers)
+            response = conn.getresponse()
+            #print response.status, response.reason
+            data = response.read()
+            conn.close()
+        except:
+            self.sw.insert_alert("Connection failed", 0, 0, 0)
 
 
-    if (float(line[4]) > float(config_data["light_threshold"])):
-        if not sent_on:
-            today = datetime.datetime.now()
-            paramsd['status'] = "Lights are back on."
-            tw = tweet("The lights are back on in {0}. ({1} UTC)".format(
-                config_data["unit"], today.strftime('%b %d %Y %H:%M')))
-            sw.insert_alert("Lights are back on.", 0, tw, 1)
-            sent_on = True
-            sent_off = False
-
-    params = urllib.urlencode(paramsd)
-
-
-    headers = {"Content-type": "application/x-www-form-urlencoded",
-               "Accept": "text/plain"}
-
-    conn = httplib.HTTPConnection("api.thingspeak.com:80")
-
-    try:
-        conn.request("POST", "/update", params, headers)
-        response = conn.getresponse()
-        #print response.status, response.reason
-        data = response.read()
-        conn.close()
-    except:
-        print "Connection failed"
+    def loop(self):
+        while True:
+            try:
+                self.send_data()
+            except Exception as e:
+                self.sw.insert_alert("Exception: {0}".format(e), 0, 0, 0)
 
 if __name__ == "__main__":
-    global config_data
     import ip
-    import json
-    import time
-
-    #while 'wlan0' not in ip.all_interfaces():
-    #    time.sleep(15)
-
     ip.broadcast_ip()
-
-    with open('/etc/thingspeak.json') as data_file:
-         config_data = json.load(data_file)
-
-    ser = serial.Serial('/dev/ttyAMA0', 9600)
-    database_file = config_data["localDB"]
-    while True:
-        try:
-            send_data(ser, database_file)
-        except Exception as e:
-            print "Exception: %s" % e
-            send_data(ser, database_file)
+    moni = monitor()
+    moni.loop()
